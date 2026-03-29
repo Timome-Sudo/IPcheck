@@ -79,6 +79,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun stopScan() {
+        scanJob?.cancel()
+        stopTimer()
+        _scanState.value = ScanState.Idle
+    }
+
     private fun startTimer() {
         timerJob = viewModelScope.launch {
             while (true) {

@@ -2,12 +2,12 @@ package com.timome.ipcheck
 
 import android.app.Application
 import android.content.Context
-import android.os.PowerManager
 import android.content.Intent
 import android.content.SharedPreferences
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Bundle
+import android.os.PowerManager
 import android.provider.Settings
 import android.widget.Toast
 import androidx.activity.ComponentActivity
@@ -15,9 +15,14 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.animation.AnimatedContentTransitionScope
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -26,13 +31,13 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
 import com.timome.ipcheck.model.AppScreen
 import com.timome.ipcheck.model.Permission
+import com.timome.ipcheck.ui.screens.AboutScreen
 import com.timome.ipcheck.ui.screens.MainScreen
 import com.timome.ipcheck.ui.screens.PermissionCenterScreen
 import com.timome.ipcheck.ui.screens.TermsOfUseScreen
@@ -41,6 +46,8 @@ import com.timome.ipcheck.ui.theme.IPCheckTheme
 import com.timome.ipcheck.viewmodel.MainViewModel
 import com.timome.ipcheck.viewmodel.OnboardingViewModel
 import com.timome.ipcheck.viewmodel.PermissionViewModel
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
 class MainActivity : ComponentActivity() {
@@ -374,31 +381,66 @@ fun AppNavigation() {
                 AppScreen.Main -> {
 
                     MainScreen(
-
                         devices = devices,
-
                         scanState = scanState,
-
                         elapsedTime = elapsedTime,
-
                         scanProgress = scanProgress,
-
                         scanProgressMax = scanProgressMax,
-
                         classifiedCount = classifiedCount,
-
                         nameFetchCount = nameFetchCount,
-
                         onStartScan = { mainViewModel.startScan() },
-
+                        onStopScan = { mainViewModel.stopScan() },
                         onDeviceOnlineStatusChange = { index, isOnline ->
-
                             mainViewModel.updateDeviceOnlineStatus(index, isOnline)
-
-                        }
-
+                        },
+                        onAboutClick = { onboardingViewModel.navigateToAppScreen(AppScreen.About) }
                     )
 
+                }
+
+                AppScreen.About -> {
+                    var showTermsDialog by remember { mutableStateOf(false) }
+                    AboutScreen(
+                        onBack = { onboardingViewModel.navigateBack() },
+                        onShowTerms = { showTermsDialog = true }
+                    )
+
+                    if (showTermsDialog) {
+                        AlertDialog(
+                            onDismissRequest = { showTermsDialog = false },
+                            title = { Text("免责声明") },
+                            text = {
+                                Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                                    Text(
+                                        text = """
+                                            1. 用户责任
+                                            本应用仅用于个人网络设备管理，用户需对使用本应用的行为承担全部责任。
+
+                                            2. 设备安全
+                                            用户应确保扫描的设备为自有或已获授权设备，未经授权扫描他人设备可能构成违法行为。
+
+                                            3. 数据隐私
+                                            本应用仅在本机运行，不会收集或上传任何用户数据或网络信息。
+
+                                            4. 免责声明
+                                            本应用按"现状"提供，不提供任何明示或暗示的保证。开发者不对使用本应用造成的任何损失负责。
+
+                                            5. 法律合规
+                                            用户需确保使用本应用符合当地法律法规，违反法规的使用风险由用户自行承担。
+
+                                            6. 版本更新
+                                            本应用可能会进行功能更新和改进，但开发者不保证持续更新或提供技术支持。
+                                        """.trimIndent()
+                                    )
+                                }
+                            },
+                            confirmButton = {
+                                TextButton(onClick = { showTermsDialog = false }) {
+                                    Text("确定")
+                                }
+                            }
+                        )
+                    }
                 }
 
             }

@@ -88,81 +88,267 @@ fun TermsOfUseScreen(
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Column(
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxWidth()
-                    .verticalScroll(rememberScrollState()),
-                horizontalAlignment = Alignment.Start
-            ) {
-                Text(
-                    text = "欢迎使用网络设备扫描器！",
-                    style = MaterialTheme.typography.headlineSmall,
-                    fontWeight = FontWeight.Bold
-                )
-
-                Spacer(modifier = Modifier.height(24.dp))
-
-                Text(
-                    text = "在使用本应用之前，请您仔细阅读以下重要条款：",
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                Text(
-                    text = "1. **网络扫描权限**\n本应用需要访问您的网络权限以扫描和识别连接设备。\n\n" +
-                          "2. **位置权限**\n应用需要位置权限以获取准确的网络信息。\n\n" +
-                          "3. **数据隐私**\n所有扫描到的设备信息仅保存在本地设备上，不会上传到任何服务器。\n\n" +
-                          "4. **使用目的**\n本应用仅用于个人网络管理，不得用于任何非法目的。\n\n" +
-                          "5. **准确性声明**\n设备类型识别和名称获取基于网络特征分析，可能存在误差。\n\n" +
-                          "6. **免责条款**\n使用本应用所产生的一切后果由用户自行承担。",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-
-                Spacer(modifier = Modifier.height(24.dp))
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Checkbox(
-                        checked = agreed,
-                        onCheckedChange = {
-                            if (canClick || forceEnable) {
-                                agreed = it
-                            } else {
-                                clickCount++
-                                if (clickCount >= 10) {
-                                    agreed = true
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxWidth()
+                            .verticalScroll(rememberScrollState()),
+                        horizontalAlignment = Alignment.Start
+                    ) {
+                        // 欢迎文本
+                        Text(
+                            text = "欢迎使用网络设备扫描器！",
+                            style = MaterialTheme.typography.headlineSmall,
+                            fontWeight = FontWeight.Bold
+                        )
+            
+                        Spacer(modifier = Modifier.height(24.dp))
+            
+                        Text(
+                            text = "在使用本应用之前，请您仔细阅读以下重要条款：",
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+            
+                        Spacer(modifier = Modifier.height(24.dp))
+            
+                        // 整个免责声明卡片
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+                        ) {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(16.dp)
+                            ) {
+                                // 章节1卡片
+                                Card(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(12.dp),
+                                    colors = CardDefaults.cardColors(
+                                        containerColor = MaterialTheme.colorScheme.surfaceVariant
+                                    )
+                                ) {
+                                    Column(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(16.dp)
+                                    ) {
+                                        Text(
+                                            text = "1. 网络扫描权限",
+                                            style = MaterialTheme.typography.titleMedium,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                        Spacer(modifier = Modifier.height(8.dp))
+                                        Text(
+                                            text = "本应用需要访问您的网络权限以扫描和识别连接设备。",
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            color = MaterialTheme.colorScheme.onSurface
+                                        )
+                                    }
                                 }
+            
+                                Spacer(modifier = Modifier.height(12.dp))
+            
+                                // 章节2卡片
+                                Card(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(12.dp),
+                                    colors = CardDefaults.cardColors(
+                                        containerColor = MaterialTheme.colorScheme.surfaceVariant
+                                    )
+                                ) {
+                                    Column(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(16.dp)
+                                    ) {
+                                        Text(
+                                            text = "2. 位置权限",
+                                            style = MaterialTheme.typography.titleMedium,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                        Spacer(modifier = Modifier.height(8.dp))
+                                        Text(
+                                            text = "应用需要位置权限以获取准确的信息。",
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            color = MaterialTheme.colorScheme.onSurface
+                                        )
+                                    }
+                                }
+            
+                                Spacer(modifier = Modifier.height(12.dp))
+            
+                                // 章节3卡片
+                                Card(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(12.dp),
+                                    colors = CardDefaults.cardColors(
+                                        containerColor = MaterialTheme.colorScheme.surfaceVariant
+                                    )
+                                ) {
+                                    Column(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(16.dp)
+                                    ) {
+                                        Text(
+                                            text = "3. 数据隐私",
+                                            style = MaterialTheme.typography.titleMedium,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                        Spacer(modifier = Modifier.height(8.dp))
+                                        Text(
+                                            text = "所有扫描到的设备信息仅保存在本地设备上，不会上传到任何服务器。",
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            color = MaterialTheme.colorScheme.onSurface
+                                        )
+                                    }
+                                }
+            
+                                Spacer(modifier = Modifier.height(12.dp))
+            
+                                // 章节4卡片
+                                Card(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(12.dp),
+                                    colors = CardDefaults.cardColors(
+                                        containerColor = MaterialTheme.colorScheme.surfaceVariant
+                                    )
+                                ) {
+                                    Column(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(16.dp)
+                                    ) {
+                                        Text(
+                                            text = "4. 使用目的",
+                                            style = MaterialTheme.typography.titleMedium,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                        Spacer(modifier = Modifier.height(8.dp))
+                                        Text(
+                                            text = "本应用仅用于个人网络管理，不得用于任何非法目的。",
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            color = MaterialTheme.colorScheme.onSurface
+                                        )
+                                    }
+                                }
+            
+                                Spacer(modifier = Modifier.height(12.dp))
+            
+                                // 章节5卡片
+                                Card(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(12.dp),
+                                    colors = CardDefaults.cardColors(
+                                        containerColor = MaterialTheme.colorScheme.surfaceVariant
+                                    )
+                                ) {
+                                    Column(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(16.dp)
+                                    ) {
+                                        Text(
+                                            text = "5. 确定性限制",
+                                            style = MaterialTheme.typography.titleMedium,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                        Spacer(modifier = Modifier.height(8.dp))
+                                        Text(
+                                            text = "设备类型识别和名称获取基于网络特征分析，可能存在误差。",
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            color = MaterialTheme.colorScheme.onSurface
+                                        )
+                                    }
+                                }
+            
+                                Spacer(modifier = Modifier.height(12.dp))
+            
+                                // 章节6卡片
+                                Card(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(12.dp),
+                                    colors = CardDefaults.cardColors(
+                                        containerColor = MaterialTheme.colorScheme.surfaceVariant
+                                    )
+                                ) {
+                                    Column(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(16.dp)
+                                    ) {
+                                        Text(
+                                            text = "6. 免责条款",
+                                            style = MaterialTheme.typography.titleMedium,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                        Spacer(modifier = Modifier.height(8.dp))
+                                        Text(
+                                            text = "使用本应用所产生的一切后果由用户自行承担。",
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            color = MaterialTheme.colorScheme.onSurface
+                                        )
+                                    }
+                                )
                             }
-                        },
-                        enabled = canClick || forceEnable
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = when {
-                            canClick -> "我已知晓"
-                            forceEnable -> "我已知晓（强制确定）"
-                            else -> "我已知晓（${countdown}s）"
-                        },
-                        style = MaterialTheme.typography.bodyMedium
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            if (clickCount > 0 && clickCount < 10) {
-                Text(
-                    text = "点击 ${10 - clickCount} 次后可强制确定",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-            }
-        }
-    }
+                        }
+            
+                        Spacer(modifier = Modifier.height(24.dp))
+            
+                        // 确认勾选框卡片（单独的卡片）
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(16.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Checkbox(
+                                    checked = agreed,
+                                    onCheckedChange = {
+                                        if (canClick || forceEnable) {
+                                            agreed = it
+                                        } else {
+                                            clickCount++
+                                            if (clickCount >= 10) {
+                                                agreed = true
+                                            }
+                                        }
+                                    },
+                                    enabled = canClick || forceEnable
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = when {
+                                        canClick -> "我已知晓"
+                                        forceEnable -> "我已知晓（强制确定）"
+                                        else -> "我已知晓（${countdown}s）"
+                                    },
+                                    style = MaterialTheme.typography.bodyMedium
+                                )
+                            }
+                        }
+            
+                        Spacer(modifier = Modifier.height(16.dp))
+            
+                        if (clickCount > 0 && clickCount < 10) {
+                            Text(
+                                text = "点击 ${10 - clickCount} 次后可强制确定",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                        }
+                    }
 }

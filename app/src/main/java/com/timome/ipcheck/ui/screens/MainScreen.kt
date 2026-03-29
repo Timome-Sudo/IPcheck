@@ -7,15 +7,20 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkHorizontally
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.*
+import androidx.compose.ui.window.DialogProperties
+
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -41,14 +46,26 @@ fun MainScreen(
     classifiedCount: Int,
     nameFetchCount: Int,
     onStartScan: () -> Unit,
+    onStopScan: () -> Unit,
     onDeviceOnlineStatusChange: (Int, Boolean) -> Unit,
+    onAboutClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    var selectedDevice by remember { mutableStateOf<Device?>(null) }
+
     Scaffold(
         modifier = modifier.fillMaxSize(),
         topBar = {
             TopAppBar(
-                title = { Text("设备列表") }
+                title = { Text("设备列表") },
+                actions = {
+                    IconButton(onClick = onAboutClick) {
+                        Icon(
+                            imageVector = Icons.Default.Info,
+                            contentDescription = "关于"
+                        )
+                    }
+                }
             )
         }
     ) { paddingValues ->
@@ -64,19 +81,55 @@ fun MainScreen(
                 scanProgressMax = scanProgressMax,
                 classifiedCount = classifiedCount,
                 nameFetchCount = nameFetchCount,
-                onStartScan = onStartScan
+                onStartScan = onStartScan,
+                onStopScan = onStopScan
             )
 
             if (devices.isNotEmpty()) {
                 Divider()
                 DeviceList(
                     devices = devices,
-                    onDeviceOnlineStatusChange = onDeviceOnlineStatusChange
+                    onDeviceOnlineStatusChange = onDeviceOnlineStatusChange,
+                    onDeviceClick = { device ->
+                        selectedDevice = device
+                    }
                 )
             } else {
                 EmptyState(scanState = scanState)
             }
         }
+    }
+
+    // 设备详情弹窗
+    if (selectedDevice != null) {
+        AlertDialog(
+            onDismissRequest = { /* 不允许点击外部关闭 */ },
+            title = {
+                Text("设备详情")
+            },
+            text = {
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    DetailRow("设备名称", selectedDevice!!.name)
+                    DetailRow("设备类型", selectedDevice!!.type.displayName)
+                    DetailRow("IPv4地址", selectedDevice!!.ipv4Address ?: "无")
+                    DetailRow("IPv6地址", selectedDevice!!.ipv6Address ?: "无")
+                    DetailRow("在线状态", if (selectedDevice!!.isOnline) "在线" else "离线")
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = { selectedDevice = null }
+                ) {
+                    Text("确定")
+                }
+            },
+            properties = DialogProperties(
+                dismissOnBackPress = false,
+                dismissOnClickOutside = false
+            )
+        )
     }
 }
 
@@ -88,7 +141,8 @@ fun ScanSection(
     scanProgressMax: Int,
     classifiedCount: Int,
     nameFetchCount: Int,
-    onStartScan: () -> Unit
+    onStartScan: () -> Unit,
+    onStopScan: () -> Unit
 ) {
     Column(
         modifier = Modifier
@@ -128,19 +182,42 @@ fun ScanSection(
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                if (scanState == ViewModelScanState.Scanning) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(80.dp),
-                        strokeWidth = 8.dp,
-                        color = ScanningBlue
-                    )
-                } else {
-                    CircularProgressIndicator(
-                        progress = { scanProgressMax.takeIf { it > 0 }?.let { scanProgress.toFloat() / it } ?: 0f },
-                        modifier = Modifier.size(80.dp),
-                        strokeWidth = 8.dp,
-                        color = ScanningBlue
-                    )
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    // 停止按钮
+                    Button(
+                        onClick = onStopScan,
+                        modifier = Modifier.size(56.dp),
+                        shape = CircleShape,
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.error
+                        ),
+                        contentPadding = PaddingValues(0.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Close,
+                            contentDescription = "停止扫描",
+                            tint = MaterialTheme.colorScheme.onError
+                        )
+                    }
+
+                    // 进度条
+                    if (scanState == ViewModelScanState.Scanning) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(80.dp),
+                            strokeWidth = 8.dp,
+                            color = ScanningBlue
+                        )
+                    } else {
+                        CircularProgressIndicator(
+                            progress = { scanProgressMax.takeIf { it > 0 }?.let { scanProgress.toFloat() / it } ?: 0f },
+                            modifier = Modifier.size(80.dp),
+                            strokeWidth = 8.dp,
+                            color = ScanningBlue
+                        )
+                    }
                 }
 
                 Spacer(modifier = Modifier.height(16.dp))
@@ -166,7 +243,8 @@ fun ScanSection(
 @Composable
 fun DeviceList(
     devices: List<Device>,
-    onDeviceOnlineStatusChange: (Int, Boolean) -> Unit
+    onDeviceOnlineStatusChange: (Int, Boolean) -> Unit,
+    onDeviceClick: (Device) -> Unit
 ) {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -174,15 +252,20 @@ fun DeviceList(
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         items(devices, key = { it.ipv4Address ?: it.ipv6Address ?: it.hashCode() }) { device ->
-            DeviceCard(device = device)
+            DeviceCard(
+                device = device,
+                onClick = { onDeviceClick(device) }
+            )
         }
     }
 }
 
 @Composable
-fun DeviceCard(device: Device) {
+fun DeviceCard(device: Device, onClick: () -> Unit) {
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
         Row(
@@ -286,5 +369,24 @@ private fun formatElapsedTime(seconds: Long): String {
         String.format("%02d:%02d:%02d", hours, minutes, secs)
     } else {
         String.format("%02d:%02d", minutes, secs)
+    }
+}
+
+@Composable
+fun DetailRow(label: String, value: String) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Text(
+            text = value,
+            style = MaterialTheme.typography.bodyMedium,
+            fontWeight = FontWeight.Medium
+        )
     }
 }

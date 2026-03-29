@@ -38,6 +38,7 @@ class OnboardingViewModel : ViewModel() {
                 _progress.value = 1f
             }
             AppScreen.Main -> {}
+            AppScreen.About -> {}
         }
     }
 
@@ -62,6 +63,7 @@ class OnboardingViewModel : ViewModel() {
             AppScreen.TermsOfUse -> _progress.value = 0.33f
             AppScreen.PermissionCenter -> _progress.value = 0.66f
             AppScreen.Main -> _progress.value = 1f
+            AppScreen.About -> _progress.value = 1f
         }
     }
 

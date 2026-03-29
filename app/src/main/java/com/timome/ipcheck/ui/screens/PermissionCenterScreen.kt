@@ -90,6 +90,26 @@ fun PermissionCenterScreen(
                 .padding(24.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
+            // 标题
+            Text(
+                text = "权限中心",
+                style = MaterialTheme.typography.headlineMedium,
+                fontWeight = FontWeight.Bold,
+                textAlign = TextAlign.Center
+            )
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // 提示语
+            Text(
+                text = "我们需要以下权限来提供完整的服务",
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center
+            )
+
+            Spacer(modifier = Modifier.height(24.dp))
+
             Column(
                 modifier = Modifier
                     .weight(1f)
@@ -97,14 +117,6 @@ fun PermissionCenterScreen(
                     .verticalScroll(rememberScrollState()),
                 horizontalAlignment = Alignment.Start
             ) {
-                Text(
-                    text = "我们需要以下权限来提供完整的服务",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold
-                )
-
-                Spacer(modifier = Modifier.height(24.dp))
-
                 PermissionGroup(
                     title = "主要权限",
                     permissions = Permission.values().filter { it.isRequired },
