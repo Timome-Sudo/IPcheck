@@ -70,6 +70,7 @@ fun AboutScreen(
     var downloadError by remember { mutableStateOf<String?>(null) }
     var showDownloadDialog by remember { mutableStateOf(false) }
     var showErrorDialog by remember { mutableStateOf(false) }
+    var currentMirrorIndex by remember { mutableIntStateOf(0) }
 
     val githubUrl = "https://github.com/Timome-Sudo/IPcheck"
 
@@ -224,16 +225,53 @@ fun AboutScreen(
             DownloadErrorDialog(
                 error = downloadError ?: "未知错误",
                 downloadUrl = downloadUrl,
-                onUseMirror = { index ->
-                    val mirrorUrl = mirrorSites[index]
-                    val proxiedUrl = "$mirrorUrl/$downloadUrl"
-                    startDownload(context, proxiedUrl, fileName, fileSize) { progress, bytes, speed ->
-                        downloadProgress = progress
-                        downloadedBytes = bytes
-                        downloadSpeed = speed
+                onRetry = {
+                    // 重试：重置镜像站索引，使用原始URL
+                    currentMirrorIndex = 0
+                    kotlinx.coroutines.GlobalScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                        startDownload(context, downloadUrl, fileName, fileSize, 
+                            { progress, bytes, speed ->
+                                downloadProgress = progress
+                                downloadedBytes = bytes
+                                downloadSpeed = speed
+                            },
+                            { error ->
+                                downloadError = error
+                                showErrorDialog = true
+                                isDownloading = false
+                            }
+                        )
                     }
                     showErrorDialog = false
                     isDownloading = true
+                },
+                onUseMirror = {
+                    // 使用镜像站：依次尝试所有镜像站
+                    if (currentMirrorIndex < mirrorSites.size) {
+                        val mirrorUrl = mirrorSites[currentMirrorIndex]
+                        val proxiedUrl = "$mirrorUrl/$downloadUrl"
+                        kotlinx.coroutines.GlobalScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                            startDownload(context, proxiedUrl, fileName, fileSize,
+                                { progress, bytes, speed ->
+                                    downloadProgress = progress
+                                    downloadedBytes = bytes
+                                    downloadSpeed = speed
+                                },
+                                { error ->
+                                    downloadError = error
+                                    showErrorDialog = true
+                                    isDownloading = false
+                                }
+                            )
+                        }
+                        currentMirrorIndex++
+                        showErrorDialog = false
+                        isDownloading = true
+                    } else {
+                        // 所有镜像站都尝试过了，显示错误信息
+                        showErrorDialog = false
+                        isDownloading = false
+                    }
                 },
                 onOpenBrowser = {
                     openUrl(context, downloadUrl)
@@ -270,16 +308,26 @@ fun AboutScreen(
     // 开始下载
     LaunchedEffect(showDownloadDialog) {
         if (showDownloadDialog && !isDownloading && downloadUrl.isNotEmpty()) {
+            currentMirrorIndex = 0
             isDownloading = true
             downloadProgress = 0f
             downloadedBytes = 0L
             downloadSpeed = "等待中..."
             downloadError = null
 
-            startDownload(context, downloadUrl, fileName, fileSize) { progress, bytes, speed ->
-                downloadProgress = progress
-                downloadedBytes = bytes
-                downloadSpeed = speed
+            kotlinx.coroutines.GlobalScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                startDownload(context, downloadUrl, fileName, fileSize,
+                    { progress, bytes, speed ->
+                        downloadProgress = progress
+                        downloadedBytes = bytes
+                        downloadSpeed = speed
+                    },
+                    { error ->
+                        downloadError = error
+                        showErrorDialog = true
+                        isDownloading = false
+                    }
+                )
             }
         }
     }
@@ -440,7 +488,8 @@ fun DownloadProgressDialog(
 fun DownloadErrorDialog(
     error: String,
     downloadUrl: String,
-    onUseMirror: (Int) -> Unit,
+    onRetry: () -> Unit,
+    onUseMirror: () -> Unit,
     onOpenBrowser: () -> Unit,
     onCopyLink: () -> Unit,
     onCopyError: () -> Unit,
@@ -463,38 +512,17 @@ fun DownloadErrorDialog(
                 Divider()
                 
                 Button(
-                    onClick = { onUseMirror(0) },
+                    onClick = onRetry,
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Text("使用镜像站1下载")
+                    Text("重试")
                 }
                 
                 Button(
-                    onClick = { onUseMirror(1) },
+                    onClick = onUseMirror,
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Text("使用镜像站2下载")
-                }
-                
-                Button(
-                    onClick = { onUseMirror(2) },
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text("使用镜像站3下载")
-                }
-                
-                Button(
-                    onClick = { onUseMirror(3) },
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text("使用镜像站4下载")
-                }
-                
-                Button(
-                    onClick = { onUseMirror(4) },
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text("使用镜像站5下载")
+                    Text("使用镜像站下载")
                 }
                 
                 OutlinedButton(
@@ -630,12 +658,13 @@ suspend fun checkForUpdate(
     }
 }
 
-fun startDownload(
+suspend fun startDownload(
     context: Context,
     url: String,
     fileName: String,
     fileSize: Long,
-    onProgress: (Float, Long, String) -> Unit
+    onProgress: (Float, Long, String) -> Unit,
+    onError: (String) -> Unit
 ) {
     try {
         val request = android.app.DownloadManager.Request(Uri.parse(url))
@@ -647,8 +676,8 @@ fun startDownload(
         val downloadManager = context.getSystemService(Context.DOWNLOAD_SERVICE) as android.app.DownloadManager
         val downloadId = downloadManager.enqueue(request)
         
-        // 使用线程来查询下载进度
-        Thread {
+        // 使用协程来查询下载进度
+        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
             val query = android.app.DownloadManager.Query().setFilterById(downloadId)
             var lastBytes = 0L
             var lastTime = System.currentTimeMillis()
@@ -659,6 +688,7 @@ fun startDownload(
                     val bytesDownloadedIndex = cursor.getColumnIndex(android.app.DownloadManager.COLUMN_BYTES_DOWNLOADED_SO_FAR)
                     val bytesTotalIndex = cursor.getColumnIndex(android.app.DownloadManager.COLUMN_TOTAL_SIZE_BYTES)
                     val statusIndex = cursor.getColumnIndex(android.app.DownloadManager.COLUMN_STATUS)
+                    val reasonIndex = cursor.getColumnIndex(android.app.DownloadManager.COLUMN_REASON)
                     
                     if (bytesDownloadedIndex >= 0 && bytesTotalIndex >= 0 && statusIndex >= 0) {
                         val bytesDownloaded = cursor.getLong(bytesDownloadedIndex)
@@ -681,18 +711,31 @@ fun startDownload(
                             }
                         }
                         
-                        if (status == android.app.DownloadManager.STATUS_SUCCESSFUL || 
-                            status == android.app.DownloadManager.STATUS_FAILED) {
+                        if (status == android.app.DownloadManager.STATUS_SUCCESSFUL) {
+                            break
+                        } else if (status == android.app.DownloadManager.STATUS_FAILED) {
+                            val reason = if (reasonIndex >= 0) cursor.getInt(reasonIndex) else -1
+                            val errorMsg = when (reason) {
+                                android.app.DownloadManager.ERROR_FILE_ALREADY_EXISTS -> "文件已存在"
+                                android.app.DownloadManager.ERROR_DEVICE_NOT_FOUND -> "设备未找到"
+                                android.app.DownloadManager.ERROR_INSUFFICIENT_SPACE -> "存储空间不足"
+                                android.app.DownloadManager.ERROR_HTTP_DATA_ERROR -> "HTTP数据错误"
+                                android.app.DownloadManager.ERROR_TOO_MANY_REDIRECTS -> "重定向过多"
+                                android.app.DownloadManager.ERROR_UNHANDLED_HTTP_CODE -> "未处理的HTTP代码"
+                                android.app.DownloadManager.ERROR_UNKNOWN -> "未知错误"
+                                else -> "下载失败（错误码：$reason）"
+                            }
+                            onError(errorMsg)
                             break
                         }
                     }
                 }
                 cursor.close()
-                Thread.sleep(500)
+                kotlinx.coroutines.delay(500)
             }
-        }.start()
+        }
     } catch (e: Exception) {
-        onProgress(0f, 0L, "下载失败: ${e.message}")
+        onError("下载失败: ${e.message}")
     }
 }
 
