@@ -29,6 +29,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import com.timome.ipcheck.model.AppScreen
 import com.timome.ipcheck.model.Permission
 import com.timome.ipcheck.ui.screens.MainScreen
@@ -39,6 +41,7 @@ import com.timome.ipcheck.ui.theme.IPCheckTheme
 import com.timome.ipcheck.viewmodel.MainViewModel
 import com.timome.ipcheck.viewmodel.OnboardingViewModel
 import com.timome.ipcheck.viewmodel.PermissionViewModel
+import kotlinx.coroutines.flow.asStateFlow
 
 class MainActivity : ComponentActivity() {
     private val sharedPreferences: SharedPreferences by lazy {
@@ -47,6 +50,21 @@ class MainActivity : ComponentActivity() {
 
     companion object {
         private const val KEY_ONBOARDING_COMPLETED = "onboarding_completed"
+    }
+
+    // 电池优化设置页面的 Launcher
+    private val batteryOptimizationLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) {
+        // 从电池优化设置页面返回后的回调
+        _batteryOptimizationSettingsReturned.value = true
+    }
+
+    private val _batteryOptimizationSettingsReturned = MutableStateFlow(false)
+    val batteryOptimizationSettingsReturned: StateFlow<Boolean> = _batteryOptimizationSettingsReturned.asStateFlow()
+
+    fun resetBatteryOptimizationFlag() {
+        _batteryOptimizationSettingsReturned.value = false
     }
 
     fun isOnboardingCompleted(): Boolean {
@@ -159,13 +177,6 @@ fun AppNavigation() {
         activity.checkAllPermissions(permissionViewModel)
     }
 
-    val batteryOptimizationLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.StartActivityForResult()
-    ) {
-        // 从电池优化设置页面返回后，重新检查权限状态
-        activity.checkAllPermissions(permissionViewModel)
-    }
-
     LaunchedEffect(Unit) {
         // 如果已完成引导，直接跳转到主界面
         if (onboardingCompleted) {
@@ -176,6 +187,15 @@ fun AppNavigation() {
         val batteryOptimizationIgnored = activity.isBatteryOptimizationIgnored()
         val batteryPermission = Permission.IGNORE_BATTERY_OPTIMIZATIONS
         permissionViewModel.updatePermissionState(batteryPermission, batteryOptimizationIgnored)
+    }
+
+    // 监听电池优化设置页面返回事件
+    val batteryOptimizationReturned by activity.batteryOptimizationSettingsReturned.collectAsState()
+    LaunchedEffect(batteryOptimizationReturned) {
+        if (batteryOptimizationReturned) {
+            activity.checkAllPermissions(permissionViewModel)
+            activity.resetBatteryOptimizationFlag()
+        }
     }
 
     val progress by onboardingViewModel.progress.collectAsState()
