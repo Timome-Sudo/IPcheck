@@ -1,8 +1,12 @@
 package com.timome.ipcheck.ui.screens
 
+import android.app.DownloadManager
+import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.net.Uri
+import android.os.Environment
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -20,17 +24,17 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
+import java.io.File
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -54,15 +58,29 @@ fun AboutScreen(
     var latestVersion by remember { mutableStateOf<String>("") }
     var updateAvailable by remember { mutableStateOf(false) }
     var updateMessage by remember { mutableStateOf<String>("") }
+    var downloadUrl by remember { mutableStateOf<String>("") }
+    var fileSize by remember { mutableStateOf<Long>(0) }
+    var fileName by remember { mutableStateOf<String>("") }
+
+    // 下载相关状态
+    var isDownloading by remember { mutableStateOf(false) }
+    var downloadProgress by remember { mutableStateOf<Float>(0f) }
+    var downloadedBytes by remember { mutableStateOf<Long>(0) }
+    var downloadSpeed by remember { mutableStateOf<String>("") }
+    var downloadError by remember { mutableStateOf<String?>(null) }
+    var showDownloadDialog by remember { mutableStateOf(false) }
+    var showErrorDialog by remember { mutableStateOf(false) }
 
     val githubUrl = "https://github.com/Timome-Sudo/IPcheck"
 
-    val checkUpdate = {
-        isCheckingUpdate = true
-        latestVersion = null
-        updateAvailable = false
-        updateMessage = ""
-    }
+    // GitHub镜像站列表
+    val mirrorSites = listOf(
+        "https://gh-proxy.com",
+        "https://mirror.ghproxy.com",
+        "https://ghps.cc",
+        "https://gh.api.99988866.xyz",
+        "https://ghdl.feizhuqwq.com"
+    )
 
     Scaffold(
         modifier = modifier.fillMaxSize(),
@@ -127,10 +145,9 @@ fun AboutScreen(
                 currentVersion = versionName,
                 onCheckUpdate = {
                     isCheckingUpdate = true
-                    // 在LaunchedEffect中调用suspend函数
                 },
                 onDownloadUpdate = {
-                    openUrl(context, "$githubUrl/releases")
+                    showDownloadDialog = true
                 }
             )
 
@@ -140,10 +157,13 @@ fun AboutScreen(
                     checkForUpdate(
                         context = context,
                         currentVersion = versionName,
-                        onSuccess = { version, message ->
+                        onSuccess = { version, message, url, size, name ->
                             latestVersion = version
                             updateAvailable = true
                             updateMessage = message
+                            downloadUrl = url
+                            fileSize = size
+                            fileName = name
                             isCheckingUpdate = false
                         },
                         onError = { message ->
@@ -185,6 +205,82 @@ fun AboutScreen(
             )
 
             Spacer(modifier = Modifier.height(24.dp))
+        }
+
+        // 下载进度对话框
+        if (showDownloadDialog && isDownloading) {
+            DownloadProgressDialog(
+                fileName = fileName,
+                progress = downloadProgress,
+                downloadedBytes = downloadedBytes,
+                totalBytes = fileSize,
+                speed = downloadSpeed,
+                onDismiss = { }
+            )
+        }
+
+        // 下载错误对话框
+        if (showErrorDialog) {
+            DownloadErrorDialog(
+                error = downloadError ?: "未知错误",
+                downloadUrl = downloadUrl,
+                onUseMirror = { index ->
+                    val mirrorUrl = mirrorSites[index]
+                    val proxiedUrl = "$mirrorUrl/$downloadUrl"
+                    startDownload(context, proxiedUrl, fileName, fileSize) { progress, bytes, speed ->
+                        downloadProgress = progress
+                        downloadedBytes = bytes
+                        downloadSpeed = speed
+                    }
+                    showErrorDialog = false
+                    isDownloading = true
+                },
+                onOpenBrowser = {
+                    openUrl(context, downloadUrl)
+                    showErrorDialog = false
+                },
+                onCopyLink = {
+                    copyToClipboard(context, downloadUrl)
+                },
+                onCopyError = {
+                    copyToClipboard(context, downloadError ?: "未知错误")
+                },
+                onDismiss = {
+                    showErrorDialog = false
+                    isDownloading = false
+                }
+            )
+        }
+
+        // 下载完成对话框
+        if (showDownloadDialog && !isDownloading && downloadProgress >= 1f && downloadError == null) {
+            AlertDialog(
+                onDismissRequest = { showDownloadDialog = false },
+                title = { Text("下载完成") },
+                text = { Text("APK文件已下载完成，请到下载文件夹查看。") },
+                confirmButton = {
+                    TextButton(onClick = { showDownloadDialog = false }) {
+                        Text("确定")
+                    }
+                }
+            )
+        }
+    }
+
+    // 开始下载
+    LaunchedEffect(showDownloadDialog) {
+        if (showDownloadDialog && !isDownloading && downloadUrl.isNotEmpty()) {
+            isDownloading = true
+            downloadProgress = 0f
+            downloadedBytes = 0L
+            downloadSpeed = "等待中..."
+            downloadError = null
+
+            startDownload(context, downloadUrl, fileName, fileSize) { progress, bytes, speed ->
+                downloadProgress = progress
+                downloadedBytes = bytes
+                downloadSpeed = speed
+            }
         }
     }
 }
@@ -266,7 +362,7 @@ fun UpdateCard(
                     onClick = onDownloadUpdate,
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Text("前往下载")
+                    Text("下载更新")
                 }
             } else if (!updateAvailable && !isCheckingUpdate && updateMessage.isEmpty()) {
                 Spacer(modifier = Modifier.height(8.dp))
@@ -278,6 +374,157 @@ fun UpdateCard(
             }
         }
     }
+}
+
+@Composable
+fun DownloadProgressDialog(
+    fileName: String,
+    progress: Float,
+    downloadedBytes: Long,
+    totalBytes: Long,
+    speed: String,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text("正在下载")
+        },
+        text = {
+            Column(
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Text(
+                    text = fileName,
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.Medium
+                )
+                
+                LinearProgressIndicator(
+                    progress = { progress },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(
+                        text = "${formatBytes(downloadedBytes)} / ${formatBytes(totalBytes)}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        text = "${(progress * 100).toInt()}%",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                
+                Text(
+                    text = speed,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text("后台下载")
+            }
+        }
+    )
+}
+
+@Composable
+fun DownloadErrorDialog(
+    error: String,
+    downloadUrl: String,
+    onUseMirror: (Int) -> Unit,
+    onOpenBrowser: () -> Unit,
+    onCopyLink: () -> Unit,
+    onCopyError: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text("下载失败")
+        },
+        text = {
+            Column(
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Text(
+                    text = "下载失败，请尝试以下方式：",
+                    style = MaterialTheme.typography.bodyMedium
+                )
+                
+                Divider()
+                
+                Button(
+                    onClick = { onUseMirror(0) },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("使用镜像站1下载")
+                }
+                
+                Button(
+                    onClick = { onUseMirror(1) },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("使用镜像站2下载")
+                }
+                
+                Button(
+                    onClick = { onUseMirror(2) },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("使用镜像站3下载")
+                }
+                
+                Button(
+                    onClick = { onUseMirror(3) },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("使用镜像站4下载")
+                }
+                
+                Button(
+                    onClick = { onUseMirror(4) },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("使用镜像站5下载")
+                }
+                
+                OutlinedButton(
+                    onClick = onOpenBrowser,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("用浏览器下载")
+                }
+                
+                OutlinedButton(
+                    onClick = onCopyLink,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("复制下载链接")
+                }
+                
+                OutlinedButton(
+                    onClick = onCopyError,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("复制错误信息")
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text("关闭")
+            }
+        }
+    )
 }
 
 @Composable
@@ -329,7 +576,7 @@ fun InfoCard(
 suspend fun checkForUpdate(
     context: Context,
     currentVersion: String,
-    onSuccess: (String, String) -> Unit,
+    onSuccess: (String, String, String, Long, String) -> Unit,
     onError: (String) -> Unit
 ) {
     withContext(Dispatchers.IO) {
@@ -347,6 +594,19 @@ suspend fun checkForUpdate(
                 val htmlUrl = json.optString("html_url", "")
                 val body = json.optString("body", "")
                 val name = json.optString("name", "")
+                
+                // 获取APK下载链接
+                val assets = json.optJSONArray("assets")
+                var downloadUrl = ""
+                var fileSize = 0L
+                var fileName = ""
+                
+                if (assets != null && assets.length() > 0) {
+                    val asset = assets.getJSONObject(0)
+                    downloadUrl = asset.optString("browser_download_url", "")
+                    fileSize = asset.optLong("size", 0L)
+                    fileName = asset.optString("name", "")
+                }
 
                 // 移除版本号前的 'v' 字符（如果有）
                 val latestVersion = tagName.removePrefix("v")
@@ -357,9 +617,9 @@ suspend fun checkForUpdate(
                     } else {
                         body
                     }
-                    onSuccess(latestVersion, message)
+                    onSuccess(latestVersion, message, downloadUrl, fileSize, fileName)
                 } else {
-                    onSuccess(latestVersion, "当前已是最新版本")
+                    onSuccess(latestVersion, "当前已是最新版本", "", 0L, "")
                 }
             } else {
                 onError("检查更新失败: ${conn.responseCode}")
@@ -370,7 +630,92 @@ suspend fun checkForUpdate(
     }
 }
 
+fun startDownload(
+    context: Context,
+    url: String,
+    fileName: String,
+    fileSize: Long,
+    onProgress: (Float, Long, String) -> Unit
+) {
+    try {
+        val request = android.app.DownloadManager.Request(Uri.parse(url))
+        request.setTitle("下载更新")
+        request.setDescription("正在下载 $fileName")
+        request.setNotificationVisibility(android.app.DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
+        request.setDestinationInExternalFilesDir(context, Environment.DIRECTORY_DOWNLOADS, fileName)
+        
+        val downloadManager = context.getSystemService(Context.DOWNLOAD_SERVICE) as android.app.DownloadManager
+        val downloadId = downloadManager.enqueue(request)
+        
+        // 使用线程来查询下载进度
+        Thread {
+            val query = android.app.DownloadManager.Query().setFilterById(downloadId)
+            var lastBytes = 0L
+            var lastTime = System.currentTimeMillis()
+            
+            while (true) {
+                val cursor = downloadManager.query(query)
+                if (cursor.moveToFirst()) {
+                    val bytesDownloadedIndex = cursor.getColumnIndex(android.app.DownloadManager.COLUMN_BYTES_DOWNLOADED_SO_FAR)
+                    val bytesTotalIndex = cursor.getColumnIndex(android.app.DownloadManager.COLUMN_TOTAL_SIZE_BYTES)
+                    val statusIndex = cursor.getColumnIndex(android.app.DownloadManager.COLUMN_STATUS)
+                    
+                    if (bytesDownloadedIndex >= 0 && bytesTotalIndex >= 0 && statusIndex >= 0) {
+                        val bytesDownloaded = cursor.getLong(bytesDownloadedIndex)
+                        val bytesTotal = cursor.getLong(bytesTotalIndex)
+                        val status = cursor.getInt(statusIndex)
+                        
+                        if (bytesTotal > 0) {
+                            val progress = bytesDownloaded.toFloat() / bytesTotal.toFloat()
+                            
+                            // 计算下载速度
+                            val currentTime = System.currentTimeMillis()
+                            val timeDiff = (currentTime - lastTime) / 1000.0
+                            if (timeDiff > 0) {
+                                val speedBytes = bytesDownloaded - lastBytes
+                                val speedBytesPerSec = (speedBytes / timeDiff).toLong()
+                                val speed = formatSpeed(speedBytesPerSec)
+                                onProgress(progress, bytesDownloaded, speed)
+                                lastBytes = bytesDownloaded
+                                lastTime = currentTime
+                            }
+                        }
+                        
+                        if (status == android.app.DownloadManager.STATUS_SUCCESSFUL || 
+                            status == android.app.DownloadManager.STATUS_FAILED) {
+                            break
+                        }
+                    }
+                }
+                cursor.close()
+                Thread.sleep(500)
+            }
+        }.start()
+    } catch (e: Exception) {
+        onProgress(0f, 0L, "下载失败: ${e.message}")
+    }
+}
+
 fun openUrl(context: Context, url: String) {
     val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
     context.startActivity(intent)
+}
+
+fun copyToClipboard(context: Context, text: String) {
+    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+    val clip = android.content.ClipData.newPlainText("文本", text)
+    clipboard.setPrimaryClip(clip)
+}
+
+fun formatBytes(bytes: Long): String {
+    return when {
+        bytes < 1024 -> "$bytes B"
+        bytes < 1024 * 1024 -> String.format("%.2f KB", bytes / 1024.0)
+        bytes < 1024 * 1024 * 1024 -> String.format("%.2f MB", bytes / (1024.0 * 1024))
+        else -> String.format("%.2f GB", bytes / (1024.0 * 1024 * 1024))
+    }
+}
+
+fun formatSpeed(bytesPerSecond: Long): String {
+    return "${formatBytes(bytesPerSecond)}/s"
 }
