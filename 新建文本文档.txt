@@ -1,0 +1,2 @@
+e: file:///D:/stone/1/IPcheck/app/src/main/java/com/timome/ipcheck/MainActivity.kt:94:13 Unresolved reference 'batteryOptimizationLauncher'.
+Fix with AI
